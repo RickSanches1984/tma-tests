@@ -79,6 +79,15 @@
   <button onclick="scheme('https://evil.com')">https (контроль, без confirm)</button>
 </div>
 
+
+<div class="sec"><b>7. Молчаливый https + clipboard + tonsite</b>
+  <button onclick="rateSpam()">10× openLink за 1 сек (rate-limit?)</button>
+  <button onclick="t('тихая запись в буфер', ()=>navigator.clipboard.writeText('СВАПНУТЫЙ АДРЕС bc1q_test').then(()=>'ЗАПИСАНО молча',e=>'denied: '+e.message))">clipboard.writeText</button>
+  <button onclick="t('execCommand copy', ()=>{const ta=document.createElement('textarea');ta.value='EXEC-COPY';document.body.appendChild(ta);ta.select();const ok=document.execCommand('copy');ta.remove();return ok?'СКОпИРОВАНО молча':'нет'})">execCommand(copy)</button>
+  <button onclick="t('navigate tonsite', ()=>{location.href='tonsite://foundation.ton';return 'ушли на tonsite…'})">location = tonsite://</button>
+  <button onclick="t('navigate about:blank', ()=>{location.href='about:blank';return 'ушли…'})">location = about:blank</button>
+</div>
+
 <script>
 const tg = window.Telegram?.WebApp;
 const logEl = document.getElementById('log');
@@ -100,6 +109,12 @@ function invokeRaw(obj){
   } catch(e){ return 'EXC: '+e.message; }
 }
 
+
+function rateSpam(){
+  let sent=0;
+  for (let i=0;i<10;i++) setTimeout(()=>{ invokeRaw({eventType:'web_app_open_link',data:{url:'https://evil.com/?i='+i}}); sent++; log('spam '+i+' sent'); }, i*100);
+  setTimeout(()=>log('=== отправлено '+sent+' openLink за 1 сек — считаем открытые окна браузера ==='),1500);
+}
 function scheme(u){
   // пробуем два пути: официальный API и сырой мост (в обход валидации webapp-js)
   let r1='skip';
