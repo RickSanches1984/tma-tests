@@ -88,6 +88,14 @@
   <button onclick="t('navigate about:blank', ()=>{location.href='about:blank';return 'ушли…'})">location = about:blank</button>
 </div>
 
+
+<div class="sec"><b>8. Тихая доставка файлов (browser-side)</b>
+  <button onclick="dl('https://raw.githubusercontent.com/RickSanches1984/tma-tests/main/dl-test/benign.txt')">openLink → .txt</button>
+  <button onclick="dl('https://raw.githubusercontent.com/RickSanches1984/tma-tests/main/dl-test/benign.zip')">openLink → .zip</button>
+  <button onclick="dl('https://github.com/RickSanches1984/tma-tests/raw/main/dl-test/benign.zip')">openLink → github raw zip</button>
+  <button onclick="dl('data:text/html,<script>document.title=1</script>')">openLink → data:</button>
+</div>
+
 <script>
 const tg = window.Telegram?.WebApp;
 const logEl = document.getElementById('log');
@@ -110,6 +118,11 @@ function invokeRaw(obj){
 }
 
 
+
+function dl(u){
+  const r1 = invokeRaw({eventType:'web_app_open_link', data:{url:u}});
+  log('DL '+u.slice(0,60)+' ⇒ raw:'+r1+' (смотрим браузер: скачал? спросил? молча?)');
+}
 function rateSpam(){
   let sent=0;
   for (let i=0;i<10;i++) setTimeout(()=>{ invokeRaw({eventType:'web_app_open_link',data:{url:'https://evil.com/?i='+i}}); sent++; log('spam '+i+' sent'); }, i*100);
