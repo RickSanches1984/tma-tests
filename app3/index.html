@@ -63,6 +63,22 @@
   <button onclick="tgf('requestWriteAccess', [])">requestWriteAccess</button>
 </div>
 
+
+<div class="sec"><b>6. OS-схемы Windows (raw invoke)</b>
+  <button onclick="scheme('ms-calculator:')">ms-calculator:</button>
+  <button onclick="scheme('calculator:')">calculator:</button>
+  <button onclick="scheme('ms-settings:')">ms-settings:</button>
+  <button onclick="scheme('ms-windows-store://pdp/?ProductId=9WZDNCRFJBMP')">ms-windows-store:</button>
+  <button onclick="scheme('search-ms:query=x&amp;displayname=Test')">search-ms: (проводник)</button>
+  <button onclick="scheme('mspaint:')">mspaint:</button>
+  <button onclick="scheme('file:///C:/Windows/win.ini')">file://</button>
+  <button onclick="scheme('ms-excel:')">ms-excel:</button>
+  <button onclick="scheme('zoommtg://zoom.us/join')">zoommtg:</button>
+  <button onclick="scheme('tg://join?invite=x')">tg://</button>
+  <button onclick="scheme('tonsite://test.ton')">tonsite:</button>
+  <button onclick="scheme('https://evil.com')">https (контроль, без confirm)</button>
+</div>
+
 <script>
 const tg = window.Telegram?.WebApp;
 const logEl = document.getElementById('log');
@@ -82,6 +98,14 @@ function invokeRaw(obj){
     if (window.TelegramGameProxy) { return 'нет external.invoke, есть proxy (только приём)'; }
     return 'канал не найден';
   } catch(e){ return 'EXC: '+e.message; }
+}
+
+function scheme(u){
+  // пробуем два пути: официальный API и сырой мост (в обход валидации webapp-js)
+  let r1='skip';
+  try { if (tg && tg.openLink) { tg.openLink(u); r1='api:ok'; } } catch(e){ r1='api:'+e.message; }
+  const r2 = invokeRaw({eventType:'web_app_open_link', data:{url:u}});
+  log('SCHEME '+u+' ⇒ '+r1+' / raw:'+r2);
 }
 function sendRaw(){ log('raw ⇒ '+invokeRaw(document.getElementById('payload').value)); }
 
