@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="UTF-8"><title>app4 — XSLT UAF (CVE-2026-125350)</title>
+<style>:root{color-scheme:dark}body{margin:0;font:13px/1.5 monospace;background:#111;color:#ddd;padding:12px}
+button{width:100%;padding:12px;margin:4px 0;border-radius:8px;border:1px solid #444;background:#222;color:#eee}
+p{color:#888}</p></style></head><body>
+<h1 style="font-size:15px">CVE-2026-125350 (libxslt UAF) — триггер</h1>
+<p>Каждая кнопка навигирует webview на XML с XSLT. Если рантайм уязвим — крах рендерера
+(панель погаснет/ошибка). Если видите «transform finished» — рантайт патчен либо XSLT отключён.</p>
+<button onclick="nav('union/catalog.xml')">1. union-вариант (краш при уязвимом рантайме)</button>
+<button onclick="nav('import/catalog.xml')">2. import-вариант</button>
+<button onclick="nav('control/catalog.xml')">3. control (должен всегда рендериться)</button>
+<script>
+function nav(u){ location.href = u; }
+if (window.Telegram?.WebApp) Telegram.WebApp.ready();
+</script>
+</body></html>
