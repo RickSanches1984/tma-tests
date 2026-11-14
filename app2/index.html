@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>App 2 — Пользователь и Haptic</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--tg-theme-bg-color, #fff);
+    color: var(--tg-theme-text-color, #111);
+  }
+  .wrap { max-width: 480px; margin: 0 auto; padding: 24px 16px; }
+  h1 { font-size: 20px; margin: 0 0 16px; }
+  pre {
+    padding: 14px;
+    border-radius: 12px;
+    font-size: 12px;
+    overflow-x: auto;
+    background: var(--tg-theme-secondary-bg-color, #f2f2f2);
+  }
+  .row { display: flex; gap: 10px; margin-top: 12px; }
+  button {
+    flex: 1;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    font-size: 14px;
+    background: var(--tg-theme-secondary-bg-color, #f2f2f2);
+    color: var(--tg-theme-text-color, #111);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Пользователь и Haptic</h1>
+  <pre id="user">…</pre>
+  <div class="row">
+    <button data-h="success">Haptic: success</button>
+    <button data-h="error">Haptic: error</button>
+  </div>
+  <div class="row">
+    <button data-h="light">Impact: light</button>
+    <button data-h="medium">Impact: medium</button>
+    <button data-h="heavy">Impact: heavy</button>
+  </div>
+</div>
+<script>
+  const tg = window.Telegram?.WebApp;
+  if (tg) { tg.ready(); tg.expand(); tg.disableVerticalSwipes?.(); }
+
+  const u = tg?.initDataUnsafe?.user;
+  document.getElementById('user').textContent = u
+    ? JSON.stringify({
+        id: u.id, first_name: u.first_name, last_name: u.last_name,
+        username: u.username, language_code: u.language_code,
+        is_premium: u.is_premium, photo_url: u.photo_url,
+        platform: tg.platform, colorScheme: tg.colorScheme, version: tg.version,
+      }, null, 2)
+    : 'Откройте мини-апп внутри Telegram — здесь появятся данные пользователя.';
+
+  document.querySelectorAll('button[data-h]').forEach(b => {
+    b.onclick = () => {
+      if (!tg?.HapticFeedback) return;
+      const h = b.dataset.h;
+      if (['light', 'medium', 'heavy', 'soft', 'rigid'].includes(h))
+        tg.HapticFeedback.impactOccurred(h);
+      else
+        tg.HapticFeedback.notificationOccurred(h);
+    };
+  });
+</script>
+</body>
+</html>

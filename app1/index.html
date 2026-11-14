@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>App 1 — Тема</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--tg-theme-bg-color, #fff);
+    color: var(--tg-theme-text-color, #111);
+    transition: background .2s, color .2s;
+  }
+  .wrap { max-width: 480px; margin: 0 auto; padding: 24px 16px 96px; }
+  h1 { font-size: 20px; margin: 0 0 16px; }
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .sw {
+    padding: 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-family: monospace;
+    overflow-wrap: anywhere;
+  }
+  .sw i { display: block; height: 36px; border-radius: 8px; margin-bottom: 6px; }
+  button {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    margin-top: 16px;
+    background: var(--tg-theme-secondary-bg-color, #f2f2f2);
+    color: var(--tg-theme-text-color, #111);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Тема Telegram</h1>
+  <div class="swatches" id="swatches"></div>
+  <button id="header">Показать/скрыть header color</button>
+</div>
+<script>
+  const tg = window.Telegram?.WebApp;
+  if (tg) { tg.ready(); tg.expand(); }
+
+  const vars = [
+    ['bg-color', '--tg-theme-bg-color'],
+    ['secondary-bg', '--tg-theme-secondary-bg-color'],
+    ['text-color', '--tg-theme-text-color'],
+    ['hint-color', '--tg-theme-hint-color'],
+    ['link-color', '--tg-theme-link-color'],
+    ['button-color', '--tg-theme-button-color'],
+    ['button-text-color', '--tg-theme-button-text-color'],
+  ];
+  const cs = getComputedStyle(document.documentElement);
+  document.getElementById('swatches').innerHTML = vars.map(([name, v]) => `
+    <div class="sw" style="background: var(--tg-theme-secondary-bg-color, #f2f2f2)">
+      <i style="background: ${cs.getPropertyValue(v) || '#ccc'}"></i>
+      ${name}<br>${cs.getPropertyValue(v).trim() || '—'}
+    </div>`).join('');
+
+  document.getElementById('header').onclick = () => {
+    if (!tg) return;
+    tg.setHeaderColor(tg.headerColor === 'secondary_bg_color' ? 'bg_color' : 'secondary_bg_color');
+  };
+</script>
+</body>
+</html>
