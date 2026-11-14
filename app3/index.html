@@ -120,8 +120,10 @@ function invokeRaw(obj){
 
 
 function dl(u){
-  const r1 = invokeRaw({eventType:'web_app_open_link', data:{url:u}});
-  log('DL '+u.slice(0,60)+' ⇒ raw:'+r1+' (смотрим браузер: скачал? спросил? молча?)');
+  let r1='skip';
+  try { tg.openLink(u); r1='api:ok'; } catch(e){ r1='api:'+e.message; }
+  const r2 = invokeRaw({eventType:'web_app_open_link', data:{url:u}});
+  log('DL '+u.slice(0,60)+' ⇒ '+r1+' / raw:'+r2);
 }
 function rateSpam(){
   let sent=0;
