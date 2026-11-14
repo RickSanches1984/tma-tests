@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>App 3 — Bridge Fuzz</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; font: 13px/1.45 monospace; background:#111; color:#ddd; padding:12px; }
+  h1 { font-size:16px; margin:0 0 8px; }
+  button { width:100%; padding:12px; margin:4px 0; font:13px monospace; border-radius:8px;
+           border:1px solid #444; background:#222; color:#eee; }
+  button:hover { background:#333; }
+  textarea { width:100%; height:80px; background:#1b1b1b; color:#0f0; border:1px solid #333;
+             font:12px monospace; padding:6px; border-radius:6px; }
+  #log { white-space:pre-wrap; background:#000; color:#9f9; padding:8px; border-radius:6px;
+         max-height:45vh; overflow:auto; margin-top:8px; }
+  .sec { margin-top:12px; border-top:1px solid #333; padding-top:8px; }
+  .sec b { color:#ffd54f; }
+</style>
+</head>
+<body>
+<h1>Bridge fuzz harness (app3)</h1>
+<div id="log">log:</div>
+
+<div class="sec"><b>1. Сырой external.invoke</b>
+  <textarea id="payload">{"eventType":"web_app_open_popup","data":{"title":"t","message":"m","buttons":[{"id":"1","type":"default","text":"ok"}]}}</textarea>
+  <button onclick="sendRaw()">invoke как есть</button>
+</div>
+
+<div class="sec"><b>2. Автофаззинг событий моста</b>
+  <button onclick="fuzzEvents()">прогнать сьют (55 векторов)</button>
+</div>
+
+<div class="sec"><b>3. Границы изоляции</b>
+  <button onclick="t('fetch file://', ()=>fetch('file:///C:/Windows/win.ini').then(r=>r.text()).then(t=>'FILE READ: '+t.slice(0,80)).catch(e=>'blocked: '+e.message))">fetch file://</button>
+  <button onclick="t('fetch desktop-app-resource', ()=>fetch('http://desktop-app-resource/../../x').then(r=>'status '+r.status).catch(e=>'blocked: '+e.message))">fetch desktop-app-resource/..</button>
+  <button onclick="t('cross-origin fetch', ()=>fetch('https://example.com/',{mode:'cors'}).then(r=>'CORS OK '+r.status).catch(e=>'blocked: '+e.message))">fetch чужой origin</button>
+  <button onclick="t('localStorage', ()=>{try{localStorage.setItem('x','1');return 'localStorage работает: '+localStorage.getItem('x')}catch(e){return 'нет: '+e.message}})">localStorage</button>
+  <button onclick="t('clipboard read', ()=>navigator.clipboard.readText().then(t=>'ЧТЕНИЕ БУФЕРА: '+t.slice(0,40)).catch(e=>'denied: '+e.message))">navigator.clipboard.read</button>
+  <button onclick="t('geo', ()=>navigator.geolocation.getCurrentPosition(p=>'GEO: '+p.coords.latitude,e=>'denied: '+e.message))">geolocation</button>
+  <button onclick="t('notif', ()=>Notification.requestPermission().then(p=>'perm: '+p))">notifications</button>
+  <button onclick="t('camera', ()=>navigator.mediaDevices.getUserMedia({video:true}).then(s=>'CAM OK').catch(e=>'denied: '+e.message))">getUserMedia</button>
+</div>
+
+<div class="sec"><b>4. Окно/навигация</b>
+  <button onclick="t('window.open', ()=>{const w=window.open('https://example.com');return w?'ПОПАП ОТКРЫТ':'заблокирован'})">window.open(example.com)</button>
+  <button onclick="location.assign(location.href.replace('/app3/','/app1/'))">redirect → app1 (мост выживает?)</button>
+  <button onclick="t('iframe same-origin + invoke', ()=>{const f=document.createElement('iframe');f.src=location.href;f.onload=()=>{try{f.contentWindow.external.invoke(JSON.stringify({eventType:'web_app_ready'}));log('IFRAME invoke прошёл!')}catch(e){log('iframe invoke: '+e.message)}};document.body.appendChild(f);return 'iframe добавлен'})">iframe invoke</button>
+</div>
+
+<div class="sec"><b>5. WebApp API с граничными данными</b>
+  <button onclick="tgf('openTelegramLink', ['https://t.me@evil.com/x'])">openTelegramLink(@evil)</button>
+  <button onclick="tgf('openTelegramLink', ['https://t.meevil.com/x'])">openTelegramLink(t.meevil)</button>
+  <button onclick="tgf('openLink', ['https://evil.com'])">openLink(evil.com)</button>
+  <button onclick="tgf('showPopup', [{title:'￿￿'.repeat(50),message:'\u2028\u2029',buttons:[{id:'\x00',type:'default',text:'a'.repeat(300)}]}])">showPopup(суррогаты/NUL/300)</button>
+  <button onclick="tgf('setHeaderColor', ['#'+'f'.repeat(99)])">setHeaderColor(длинный hex)</button>
+  <button onclick="tgf('openInvoice', ['\u0000'.repeat(10)])">openInvoice(NUL slug)</button>
+  <button onclick="tgf('setEmojiStatus', [{custom_emoji_id:'99999999999999999999', duration:-1}])">setEmojiStatus(big id)</button>
+  <button onclick="tgf('CloudStorage.setItem', ['k','v'.repeat(700000)])">CloudStorage(700KB)</button>
+  <button onclick="tgf('requestPhone', [])">requestPhone</button>
+  <button onclick="tgf('requestWriteAccess', [])">requestWriteAccess</button>
+</div>
+
+<script>
+const tg = window.Telegram?.WebApp;
+const logEl = document.getElementById('log');
+function log(s){ const d=document.createElement('div'); d.textContent='› '+s; logEl.parentNode.insertBefore(d, logEl.nextSibling); }
+function t(name, fn){ Promise.resolve().then(fn).then(r=>log(name+' ⇒ '+r), e=>log(name+' ⚠ '+(e&&e.message||e))); }
+if (tg){ tg.ready(); tg.expand(); log('WebApp init ok; platform='+tg.platform+' ver='+tg.version); }
+else log('нет Telegram.WebApp — открыто вне клиента?');
+
+// --- сырой мост ---
+function invokeRaw(obj){
+  try {
+    if (window.external && window.external.invoke){
+      window.external.invoke(typeof obj==='string'?obj:JSON.stringify(obj));
+      return 'sent';
+    }
+    // webapp js proxy путь
+    if (window.TelegramGameProxy) { return 'нет external.invoke, есть proxy (только приём)'; }
+    return 'канал не найден';
+  } catch(e){ return 'EXC: '+e.message; }
+}
+function sendRaw(){ log('raw ⇒ '+invokeRaw(document.getElementById('payload').value)); }
+
+function tgf(method, args){
+  try {
+    const path = method.split('.');
+    let fn = tg; for (const p of path) fn = fn[p];
+    const r = fn.apply(tg, args);
+    log(method+' ⇒ '+(r&&r.then?'(promise) ждём…':JSON.stringify(r)));
+    if (r&&r.then) r.then(v=>log(method+' → '+JSON.stringify(v).slice(0,120)), e=>log(method+' ✗ '+JSON.stringify(e).slice(0,120)));
+  } catch(e){ log(method+' ⚠ '+e.message); }
+}
+
+// --- сьют фаззинга event'ов ---
+const EVENTS = ['web_app_ready','web_app_close','web_app_data_send','web_app_switch_inline_query',
+ 'web_app_setup_main_button','web_app_setup_secondary_button','web_app_setup_back_button','web_app_setup_settings_button',
+ 'web_app_set_header_color','web_app_set_background_color','web_app_set_bottom_bar_color','web_app_enable_bottom_bar',
+ 'web_app_open_tg_link','web_app_open_link','web_app_open_invoice','web_app_open_popup','web_app_open_scan_qr_popup',
+ 'web_app_open_telegram_link','web_app_share_to_story','web_app_request_theme','web_app_request_viewport',
+ 'web_app_request_safe_area','web_app_request_content_safe_area','web_app_request_fullscreen','web_app_exit_fullscreen',
+ 'web_app_lock_orientation','web_app_unlock_orientation','web_app_axp_request_fullscreen','web_app_accelerometer_start',
+ 'web_app_gyroscope_start','web_app_device_orientation_start','web_app_request_phone','web_app_request_write_access',
+ 'web_app_request_email','web_app_invoke_custom_method','web_app_read_text_from_clipboard','web_app_biometry_get_info',
+ 'web_app_biometry_request_access','web_app_biometry_authenticate','web_app_biometry_update_token',
+ 'web_app_setup_closing_behavior','web_app_check_file_downloads','web_app_request_file_download','web_app_downloads_updated',
+ 'web_app_set_emoji_status','web_app_request_emoji_status_access','web_app_send_prepared_message','web_app_request_chat',
+ 'web_app_check_location','web_app_request_location','web_app_device_storage_save','web_app_device_storage_get',
+ 'web_app_device_storage_clear','web_app_share_score','web_app_verify_age','shell_*unknown','web_app_'.repeat(50)+'x'];
+const WEIRD = [null, [], {}, 0, -1, 2e9, '', '\u0000', 'a'.repeat(100000),
+  {url:''},{url:'https://t.me@evil'},{slug:1},{id:{},text:[],type:'default'},
+  {event_id:'x',listener:{callback:1}},{custom_emoji_id:'NaN'},{key:2e9,value:{}}];
+
+function fuzzEvents(){
+  log('=== сьют: '+EVENTS.length+' событий × 5 аргументов ===');
+  let n=0, delay=0;
+  for (const ev of EVENTS){
+    for (const data of [null, [], {url:'https://evil.com'}, {x:'\u0000'.repeat(1000)}, {title:2e9,buttons:0}]){
+      setTimeout(()=>{ invokeRaw({eventType:ev, data}); n++; }, delay); delay += 120;
+    }
+  }
+  setTimeout(()=>log('=== отправлено '+n+' пакетов; смотрим выше ответы/крахи ==='), delay+500);
+}
+
+// перехват ответов натива (postEvent приходит через proxy)
+const origReceive = window.TelegramGameProxy && window.TelegramGameProxy.receiveEvent;
+if (window.TelegramGameProxy){
+  window.TelegramGameProxy.receiveEvent = function(ev, data){
+    log('⇐ native event: '+ev+' '+(typeof data==='string'?data.slice(0,100):JSON.stringify(data||null).slice(0,100)));
+    return origReceive && origReceive.apply(this, arguments);
+  };
+}
+log('app3 готов. Platform: '+(navigator.userAgent.slice(0,60)));
+</script>
+</body>
+</html>
